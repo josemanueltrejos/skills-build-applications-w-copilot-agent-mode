@@ -28,22 +28,33 @@ OctoFit Tracker is a three-tier application for a school fitness program. The st
 
 ## Implementation decisions
 
-Record your plan here before editing code.
-
-- Presentation tier decision:
-- Logic tier decision:
-- Data tier decision:
-- Activity tracking approach:
-- Team management approach:
-- Leaderboard approach:
-- Workout suggestions approach:
+- Presentation tier decision: Implement React route components in `octofit-tracker/frontend/src/components` and make every API call through `src/api/client.ts`. Keep presentation responsible for loading, empty, success, and accessible error states while leaving persistence and business rules to the backend.
+- Logic tier decision: Use explicit Express routes for `/api/*` and delegate validation and behavior to functions in `octofit-tracker/backend/src/services/octofitService.ts`. Return deliberate 4xx responses for bad IDs and unknown resources, and keep HTTP error handling in the routes.
+- Data tier decision: Define required, typed Mongoose fields in the models. Store `User.team`, `Team.members`, and activity references as ObjectIds; keep seed fixtures stable and idempotent with upserts and no collection-wide deletion.
+- Activity tracking approach: Validate the submitted IDs with `mongoose.Types.ObjectId.isValid`, confirm both referenced records exist, and reject missing or malformed references with 4xx. Create a lean activity record from the request, with positive points and `occurredAt` computed in the service.
+- Team management approach: Require a non-empty `name` and `mascot` in both the Team schema and team creation service. Preserve submitted members and expose team member ObjectIds through both create and list responses.
+- Leaderboard approach: Aggregate activity `points` by team, sum points for each team, sort descending, and assign a 1-based rank in the returned `{ teamName, totalPoints, rank }` entries.
+- Workout suggestions approach: Resolve the decoded email to a seeded or created User, derive the user's recent activity pattern or fitness goal, and select matching workouts. Return a 404-style 4xx response when the email has no matching user and include a reason based on the matching goal or activity.
 
 ## Test plan
 
-Record the commands you run and what each failure means.
-
+- Install dependencies:
+  - `npm install --prefix octofit-tracker/backend`
+  - `npm install --prefix octofit-tracker/frontend`
+  - There is no root `package.json`, so run install commands from this repository only with `--prefix`.
 - Data-tier command: `npm run test:data --prefix octofit-tracker/backend`
+  - Use this first to verify Mongoose required fields and idempotent seeding. A validation assertion failure means a model is missing required schema rules; a seeding failure means fixtures or team membership reconciliation is incorrect.
 - API command: `npm run test:api --prefix octofit-tracker/backend`
+  - Run after the data models pass. A 501 response means activity or team behavior is still pending; malformed/missing references must return 4xx rather than cast-error 500s. Leaderboard and workout failures indicate incorrect service aggregation or matching.
 - Frontend command: `npm test --prefix octofit-tracker/frontend`
+  - Run after the API contract passes. Failures showing `Implementation pending` mean a capability has not fetched or rendered data; missing status/alert roles mean loading or error states are incomplete.
 - Backend build command: `npm run build --prefix octofit-tracker/backend`
+  - Run after API implementation to catch Express, Mongoose, and TypeScript type errors.
 - Frontend build command: `npm run build --prefix octofit-tracker/frontend`
+  - Run after presentation implementation to verify React, Router, and Vite composition.
+- Smallest implementation order:
+  1. Complete Mongoose validation and seed behavior.
+  2. Implement teams and activities in routes/services.
+  3. Implement leaderboard aggregation and workout matching.
+  4. Implement the shared presentation states and capability components.
+  5. Re-run data tests, API tests, frontend tests, and both builds.
